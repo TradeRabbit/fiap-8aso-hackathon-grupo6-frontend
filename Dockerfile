@@ -11,6 +11,7 @@ COPY nginx.conf /etc/nginx/conf.d/configfile.template
 
 COPY --from=react-build /app/build /usr/share/nginx/html
 
+ENV BACKEND_URL https://backend-eljtondl6q-uc.a.run.app
 ENV PORT 8080
 ENV HOST 0.0.0.0
 EXPOSE 8080
