@@ -1,91 +1,58 @@
-name: Google Cloud Run Deploy
-# https://github.com/google-github-actions/setup-gcloud
-on:
+# Nome do Workflow
+name: Frontend Pipeline - Hackathon
+
+# Evento que irá acionar a pipeline
+on: 
   push:
     branches:
       - main
 
-env:
-  PROJECT_ID: ${{ secrets.GCR_PROJECT }}
-  RUN_REGION: us-central1
-  SERVICE_NAME: hack-grupo-06-frontend
-  
 jobs:
-  build:
-    name: Build React App
+  Build:
+      name: Build
+      runs-on: ubuntu-latest
+      steps: 
+        - name: Clone do Repositório
+          uses: actions/checkout@v2
+
+        - name: Login no Google Artifact Registry
+          env:
+            GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          run: | 
+            echo '${{ secrets.GOOGLE_CREDENTIALS }}' > key.json
+            cat key.json | docker login -u _json_key --password-stdin https://us-east4-docker.pkg.dev/
+
+        - name: Build Imag & Push para Google Registry
+          env: 
+            ARTIFACT_REGISTRY: ${{ secrets.ARTIFACT_REGISTRY }}
+          run: | 
+            docker build -t ${{ secrets.ARTIFACT_REGISTRY }}/frontend:latest .
+            docker push ${{ secrets.ARTIFACT_REGISTRY }}/frontend:latest
+
+  Deploy:
+    needs: Build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@main
+      - name: Clone do Repositório
+        uses: actions/checkout@v2
 
-      - name: Setup Node.js (NPM)
-        uses: actions/setup-node@master
-        with:
-          node-version: '16.x'
-
-      - name: Use cached node_modules
-        uses: actions/cache@master
-        with:
-          path: node_modules
-          key: nodeModules-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            nodeModules-
-
-      - name: Install dependencies
-        #run: yarn install --frozen-lockfile
-        run: yarn install
+      - name: Autenticação no Google Cloud
         env:
-          CI: true
-
-      - name: Build Development
-        run: yarn build
-
-      - name: Archive Production Artifact
-        uses: actions/upload-artifact@main
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        uses: 'google-github-actions/auth@v0'
         with:
-          name: build
-          path: build
+          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
 
-  deploy-gcr:
-    name: Deploy to GCR
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@main
-
-      - name: Download Artifact
-        uses: actions/download-artifact@main
-        with:
-          name: build
-          path: .docker/build
-
-      - name: Setup GCloud Auth
-        id: auth
-        uses: google-github-actions/auth@v0
-        with:
-          service_account: '${{ secrets.GCR_SERVICE_ACCOUNT_EMAIL }}'
-          credentials_json: ${{ secrets.GCR_SA_KEY }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v0.2.1
-
-      # Build and push image to Google Container Registry
-      - name: Build & Push
-        run: |-
-          gcloud builds submit \
-            --quiet \
-            --tag "gcr.io/hack-aso-grupo-06/frontend:latest"
-        working-directory: .docker
-
-      # Deploy image to Cloud Run
-      - name: Deploy GCR
+      - name: Deploy frontend no  Cloud Run
+        id: deploy
         run: |-
           gcloud run deploy frontend \
             --quiet \
-            --region us-central1 \
-            --image "gcr.io/hack-aso-grupo-06/frontend:latest" \
-            --platform "managed" \
-            --allow-unauthenticated
+            --region  ${{ secrets.GOOGLE_REGION }} \
+            --image ${{ secrets.ARTIFACT_REGISTRY }}/frontend:latest \
+            --platform managed \
+            --set-env-vars BACKEND_URL=${{ secrets.BACKEND_URL }} \
+            --allow-unauthenticated \
+            --project ${{ secrets.GCR_PROJECT }} \
+            --format json
