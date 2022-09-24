@@ -9,7 +9,6 @@ env:
   PROJECT_ID: ${{ secrets.GCR_PROJECT }}
   RUN_REGION: us-central1
   SERVICE_NAME: hack-grupo-06-frontend
-  GAR_LOCATION: YOUR_GAR_LOCATION # TODO: update Artifact Registry location
   
 jobs:
   build:
@@ -78,15 +77,15 @@ jobs:
         run: |-
           gcloud builds submit \
             --quiet \
-            --tag "gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA"
+            --tag "gcr.io/hack-aso-grupo-06/frontend:latest"
         working-directory: .docker
 
       # Deploy image to Cloud Run
       - name: Deploy GCR
         run: |-
-          gcloud run deploy "$SERVICE_NAME" \
+          gcloud run deploy frontend \
             --quiet \
-            --region "$RUN_REGION" \
-            --image "gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA" \
+            --region us-central1 \
+            --image "gcr.io/hack-aso-grupo-06/frontend:latest" \
             --platform "managed" \
             --allow-unauthenticated
